@@ -83,6 +83,7 @@ class PosMachineController extends Controller
             'email' => $user->email,
             'balance' => $user->balanceFloat,
             'card' => $user->card,
+            'pin_status' => $user->enable_pin,
         ], 200);
     }
 

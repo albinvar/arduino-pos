@@ -102,11 +102,14 @@ void displayMenu() {
 
 void createTransaction() {
   lcd.clear();
+  isResetNeeded = 1;
   lcd.setCursor(0, 0);
   lcd.print("Enter amount:");
   lcd.setCursor(0, 1);
   lcd.print("Rs ");
   static String amount = ""; // Variable to store the entered amount
+
+  String cardUID = ""; // Variable to store the scanned card UID
 
   char key;
 
@@ -134,12 +137,90 @@ void createTransaction() {
     } else if (key == '#') {
       if (amount.length() > 0) {
         lcd.clear();
-        scanCard();
-        waitForPIN();
-        delay(2000); // Add a delay after completing the transaction
-        isInMenu = true; // Set flag to true to enable main menu input
-        displayMenu(); // Show the main menu again
-        break; // Exit the loop after completing the transaction
+        sendCommand("validate-card");
+        cardUID = scanCard();
+        sendCommand(cardUID);
+
+        // show waiting message
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Processing...");
+        lcd.setCursor(0, 1);
+        lcd.print("Please wait...");
+
+
+        // Wait for response from Python script
+        while (!Serial.available()) {
+          delay(100); // Wait for data to be available
+        }
+
+        // Read balance data from serial
+        String validationResult = Serial.readStringUntil('\n');
+        validationResult.trim(); // Remove leading and trailing whitespaces
+
+        // check if the card is valid
+        if (validationResult.startsWith("Valid")) {
+        
+          // check if the string is true or false
+          //  expected b'pin_status: True'
+          if (validationResult.endsWith("True")) {
+            lcd.clear();
+            lcd.setCursor(0, 1);
+            lcd.print("Processing...");
+            waitForPIN();
+          } else {
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("Processing...");
+            lcd.setCursor(0, 1);
+            lcd.print("Hold on...");
+            sendCommand("complete-transaction");
+            sendCommand("0000");
+          }
+            // send transaction data to python script
+            //convert amount to rupees by multiplying by 100
+            sendCommand(String(amount.toInt() * 100));
+            sendCommand(cardUID);
+            
+            // Wait for response from Python script
+            while (!Serial.available()) {
+              delay(100); // Wait for data to be available
+            }
+
+            // Read balance data from serial
+            String transactionStatus = Serial.readStringUntil('\n');
+            transactionStatus.trim(); // Remove leading and trailing whitespaces
+
+            // check if the transaction is successful
+            if (transactionStatus.startsWith("Transaction: Success")) {
+              lcd.clear();
+              lcd.setCursor(0, 0);
+              lcd.print("Transaction");
+              lcd.setCursor(0, 1);
+              lcd.print("Successful!");
+              delay(3000); // Display success message for 2 seconds
+            } else {
+              lcd.clear();
+              lcd.setCursor(0, 0);
+              lcd.print("Transaction");
+              lcd.setCursor(0, 1);
+              lcd.print("Failed!");
+            }
+          delay(2000); // Add a delay after completing the transaction
+          isInMenu = true; // Set flag to true to enable main menu input
+          displayMenu(); // Show the main menu again
+          break; // Exit the loop after completing the transaction
+        } else {
+          lcd.clear();
+          lcd.setCursor(0, 0);
+          lcd.print("Card is invalid!");
+          delay(5000); // Display invalid card message for 2 seconds
+          lcd.clear();
+          isResetNeeded = 1;
+          lcd.setCursor(0, 0);
+          lcd.print("Enter amount:");
+          lcd.setCursor(0, 1);
+        }
       }
     } else if (isDigit(key) && amount.length() < 6) {
       amount += key;
@@ -184,12 +265,12 @@ void checkBalance() {
   }
 
   buzzerNotification();
-  delay(5000); // Add a delay after displaying balance
+  delay(6000); // Add a delay after displaying balance
   isInMenu = true; // Set flag to true to enable main menu input
   displayMenu(); // Show the main menu again
 }
 
-void scanCard() {
+String scanCard() {
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Please place your");
@@ -231,9 +312,11 @@ void scanCard() {
       mfrc522.PCD_StopCrypto1();
 
       cardDetected = true; // Set flag to true to exit the loop
+      return cardUID;
     }
   }
   buzzerNotification();
+  return "";
 }
 
 void waitForPIN() {
@@ -260,6 +343,8 @@ void waitForPIN() {
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("Success!");
+    sendCommand("complete-transaction");
+    sendCommand(enteredPIN);
     isResetNeeded = 1;
     buzzerNotification(1000);
     // Do something when PIN is correct, like completing the transaction
