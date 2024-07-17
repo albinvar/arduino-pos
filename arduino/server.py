@@ -9,6 +9,8 @@ port = 'COM6'
 baudrate = 9600
 
 # Bearer token for authorization
+bearer_token = 'UqRTgiknI0xDZ5HJ0xNGTvpMlVDSEAUmgu36s6Skd125eccd'
+# Bearer token for authorization
 bearer_token = 'yKTyfjfgpMoxB7eDBxzO3CeuHo4XX41BlHnOvmllc4b671f0'
 
 # POS server configuration
@@ -99,6 +101,8 @@ try:
             card_data = validate_card(card_id)
 
             print(card_id)
+
+            print(card_data)
 
             # Send card data to Arduino if valid
             if card_data is not None:
